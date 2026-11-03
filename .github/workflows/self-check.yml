@@ -1,0 +1,162 @@
+name: Self Check
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selfcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Byte-compile all scripts
+        run: |
+          python3 -m py_compile skills/obsidian-protege-neo4j/scripts/*.py
+          echo "compile: OK"
+
+      - name: ETL dry-run on the demo vault
+        run: |
+          python3 skills/obsidian-protege-neo4j/scripts/kb_etl.py \
+            --vault ./demo_vault --out ./ci_out --dry-run
+          test -d ci_out && echo "dry-run wrote nothing unexpected" || true
+
+      - name: ETL + offline-import preparation
+        run: |
+          python3 skills/obsidian-protege-neo4j/scripts/kb_etl.py \
+            --vault ./demo_vault --out ./ci_out
+          python3 skills/obsidian-protege-neo4j/scripts/prepare_import.py \
+            ./ci_out ./ci_ready
+
+      - name: Assert the import-ready CSV carries id and KBNode
+        run: |
+          python3 - <<'PY'
+          import csv, sys
+          with open('ci_ready/nodes.csv', newline='', encoding='utf-8') as fh:
+              rows = list(csv.DictReader(fh))
+          assert rows, 'nodes.csv is empty'
+          assert 'id' in rows[0], 'nodes.csv is missing the plain "id" property'
+          assert 'KBNode' in rows[0].get('labels', ''), 'nodes.csv is missing the KBNode label'
+          ids = [r['id'] for r in rows]
+          assert len(ids) == len(set(ids)), 'duplicate node ids'
+          print(f'nodes: {len(rows)}, all carry id + KBNode, ids unique')
+          PY
+
+      - name: Assert relationships resolve to existing nodes
+        run: |
+          python3 - <<'PY'
+          import csv
+          with open('ci_ready/nodes.csv', newline='', encoding='utf-8') as fh:
+              ids = {r['id'] for r in csv.DictReader(fh)}
+          with open('ci_ready/relationships.csv', newline='', encoding='utf-8') as fh:
+                  rels = list(csv.DictReader(fh))
+          dangling = [r for r in rels if r['start'] not in ids or r['end'] not in ids]
+          assert not dangling, f'dangling relationships: {dangling[:3]}'
+          print(f'relationships: {len(rels)}, all endpoints resolve')
+          PY
+
+      - name: Ontology inspection
+        run: |
+          python3 skills/obsidian-protege-neo4j/scripts/owl_check.py \
+            ./skills/obsidian-protege-neo4j/templates/ontology-minimal.ttl
+
+      - name: Sync planner must refuse a destructive delete ratio
+        run: |
+          cat > /tmp/kg_graph.json <<'JSON'
+          [
+            {"id": "stale-a.md", "labels": ["KBNode", "Document"], "hash": "x"},
+            {"id": "stale-b.md", "labels": ["KBNode", "Document"], "hash": "x"},
+            {"id": "stale-c.md", "labels": ["KBNode", "Document"], "hash": "x"},
+            {"id": "stale-d.md", "labels": ["KBNode", "Document"], "hash": "x"},
+            {"id": "stale-e.md", "labels": ["KBNode", "Document"], "hash": "x"}
+          ]
+          JSON
+          set +e
+          python3 skills/obsidian-protege-neo4j/scripts/kb_sync_plan.py \
+            --vault ./demo_vault --graph-state /tmp/kg_graph.json
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "expected the safety stop-line to exit 1, got $rc"
+            exit 1
+          fi
+          echo "safety stop-line: OK (exit 1)"
+
+      - name: Backup verifier must reject a broken export
+        run: |
+          cat > /tmp/kg_broken.json <<'JSON'
+          {"nodes": [{"id": "a", "labels": ["KBNode"]}, {"id": "a", "labels": ["KBNode"]}],
+           "relationships": [{"start": "a", "end": "ghost"}]}
+          JSON
+          set +e
+          python3 skills/obsidian-protege-neo4j/scripts/graph_verify.py \
+            --export /tmp/kg_broken.json
+          rc=$?
+          set -e
+          if [ "$rc" -ne 1 ]; then
+            echo "expected a broken export to exit 1, got $rc"
+            exit 1
+          fi
+          echo "broken export detected: OK (exit 1)"
+
+      - name: Scan for leaked secrets and private paths
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          ROOT = pathlib.Path('.')
+          RULES = [
+              (r'(?i)\b(api[_-]?key|secret|token|password|passwd)\b\s*[:=]\s*["\'][^"\']{8,}["\']', 'hardcoded credential'),
+              (r'AKIA[0-9A-Z]{16}', 'aws access key id'),
+              (r'sk-[A-Za-z0-9]{20,}', 'openai-style api key'),
+              (r'ghp_[A-Za-z0-9]{20,}', 'github token'),
+              (r'\b\d{17}[\dXx]\b', 'china id number'),
+              (r'\b\d{16,19}\b', 'possible bank card number'),
+              (r'/(?:%s)/[A-Za-z0-9._-]+/' % 'Users', 'absolute macOS home path'),
+              (r'(?i)(腾讯云|阿里云|华为云)?(access[_-]?key|secret[_-]?key)\s*[:=]\s*["\'][^"\']{6,}["\']', 'cloud credential'),
+          ]
+          SKIP_DIRS = {'.git', 'ci_out', 'ci_ready', 'demo_out', 'demo_ready', '__pycache__'}
+          SKIP_FILES = {'LICENSE'}
+          hits = []
+          for path in ROOT.rglob('*'):
+              if not path.is_file():
+                  continue
+              if any(part in SKIP_DIRS for part in path.parts):
+                  continue
+              if path.name in SKIP_FILES or path.suffix in {'.png', '.svg'}:
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except (UnicodeDecodeError, OSError):
+                  continue
+              for pat, label in RULES:
+                  for m in re.finditer(pat, text):
+                      line = text.count('\n', 0, m.start()) + 1
+                      hits.append(f'{path}:{line}  {label}')
+          if hits:
+              print('SECRET / PRIVACY SCAN FAILED')
+              for h in hits:
+                  print('  ' + h)
+              sys.exit(1)
+          print(f'secret scan: clean ({len(RULES)} rules)')
+          PY
+
+      - name: Verify the ontology template still opens as valid Turtle
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('skills/obsidian-protege-neo4j/templates/ontology-minimal.ttl').read_text(encoding='utf-8')
+          assert text.rstrip().endswith('.'), 'Turtle file must end with a statement terminator'
+          for needed in ('@prefix kb:', 'a owl:Class', 'a owl:ObjectProperty', 'sh:NodeShape'):
+              assert needed in text, f'missing expected construct: {needed}'
+          print('ontology template: OK')
+          PY

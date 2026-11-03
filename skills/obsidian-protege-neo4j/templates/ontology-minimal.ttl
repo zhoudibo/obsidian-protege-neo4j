@@ -1,0 +1,98 @@
+@prefix kb: <https://example.org/kb/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+<https://example.org/kb/ontology>
+    a owl:Ontology ;
+    owl:versionIRI <https://example.org/kb/ontology/1.0.0> ;
+    owl:versionInfo "1.0.0" ;
+    dcterms:title "Obsidian 知识库最小本体"@zh-CN ;
+    dcterms:description "Obsidian Vault 到 Neo4j 的最小可用本体：4 类节点、3 类关系、1 条约束。"@zh-CN .
+
+### 顶层类
+
+kb:KnowledgeArtifact a owl:Class ; rdfs:label "知识产物"@zh-CN .
+
+### 类
+
+kb:Directory a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "目录"@zh-CN .
+kb:IndexCard a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "索引卡"@zh-CN .
+kb:Document a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "文档"@zh-CN .
+kb:Tag a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "标签"@zh-CN .
+kb:Domain a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "主题域"@zh-CN .
+kb:SourceSystem a owl:Class ; rdfs:subClassOf kb:KnowledgeArtifact ; rdfs:label "来源系统"@zh-CN .
+
+### 对象属性（方向必须与图数据库映射一致）
+
+kb:contains a owl:ObjectProperty ;
+    rdfs:label "包含"@zh-CN ;
+    rdfs:domain kb:Directory ;
+    rdfs:range kb:KnowledgeArtifact .
+
+kb:linksTo a owl:ObjectProperty ;
+    rdfs:label "链接到"@zh-CN ;
+    rdfs:domain kb:IndexCard ;
+    rdfs:range kb:Document .
+
+kb:taggedWith a owl:ObjectProperty ;
+    rdfs:label "带有标签"@zh-CN ;
+    rdfs:domain kb:Document ;
+    rdfs:range kb:Tag .
+
+kb:hasIndex a owl:ObjectProperty ;
+    rdfs:label "拥有索引卡"@zh-CN ;
+    rdfs:domain kb:Directory ;
+    rdfs:range kb:IndexCard .
+
+kb:sourcedFrom a owl:ObjectProperty ;
+    rdfs:label "来源于"@zh-CN ;
+    rdfs:domain kb:KnowledgeArtifact ;
+    rdfs:range kb:SourceSystem .
+
+kb:relatedTo a owl:ObjectProperty ;
+    rdfs:label "相关联"@zh-CN ;
+    rdfs:domain kb:KnowledgeArtifact ;
+    rdfs:range kb:KnowledgeArtifact ;
+    owl:symmetric true .
+
+### 数据属性
+
+kb:businessId a owl:DatatypeProperty ;
+    rdfs:label "业务标识"@zh-CN ;
+    rdfs:domain kb:KnowledgeArtifact ;
+    rdfs:range xsd:string .
+
+kb:contentHash a owl:DatatypeProperty ;
+    rdfs:label "内容哈希"@zh-CN ;
+    rdfs:domain kb:Document ;
+    rdfs:range xsd:string .
+
+kb:securityLevel a owl:DatatypeProperty ;
+    rdfs:label "保密级别"@zh-CN ;
+    rdfs:domain kb:KnowledgeArtifact ;
+    rdfs:range xsd:string .
+
+### SHACL 约束（实例数据质量）
+
+kb:KnowledgeArtifactShape
+    a sh:NodeShape ;
+    sh:targetClass kb:KnowledgeArtifact ;
+    sh:property [
+        sh:path kb:businessId ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:datatype xsd:string ;
+        sh:minLength 1 ;
+        sh:message "知识产物必须有且仅有一个非空 businessId。"@zh-CN
+    ] ;
+    sh:property [
+        sh:path kb:securityLevel ;
+        sh:minCount 1 ;
+        sh:maxCount 1 ;
+        sh:in ("public" "internal" "confidential" "restricted") ;
+        sh:message "知识产物必须使用批准的保密级别。"@zh-CN
+    ] .

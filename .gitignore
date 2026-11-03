@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ETL / import scratch output
+ci_out/
+ci_ready/
+demo_out/
+demo_ready/
+graph_nodes.json
+*.csv
+!demo_vault/**/*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
