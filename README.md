@@ -7,7 +7,7 @@
 > 把 Obsidian 里的 Markdown 笔记，变成**可查询、可增量更新、可恢复**的本地知识图谱。
 > 五个零依赖 Python 脚本 + 一份实战沉淀的 SKILL.md，源自真实跑通的本地工程。
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Neo4j](https://img.shields.io/badge/Neo4j-5.x-018BFF?logo=neo4j)](https://neo4j.com/)
 [![OWL](https://img.shields.io/badge/OWL%202%20%2B%20SHACL-orange.svg)](https://www.w3.org/TR/owl2-overview/)

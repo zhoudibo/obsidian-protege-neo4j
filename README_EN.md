@@ -7,7 +7,7 @@
 > Turn a folder of Markdown notes in Obsidian into a **queryable, incrementally synced, recoverable** local knowledge graph.
 > Five zero-dependency Python scripts and a battle-tested SKILL.md, distilled from a real local engineering project.
 
-[![Python](https://img.shields.io/badge/Python-3.9%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Neo4j](https://img.shields.io/badge/Neo4j-5.x-018BFF?logo=neo4j)](https://neo4j.com/)
 [![OWL](https://img.shields.io/badge/OWL%202%20%2B%20SHACL-orange.svg)](https://www.w3.org/TR/owl2-overview/)

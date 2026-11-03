@@ -17,6 +17,8 @@ description: Build and operate a three-layer local knowledge graph from an Obsid
 
 **关键边界**：OWL 本体是业务语义标准，Neo4j 是运行查询投影。两者通过稳定的类/属性/关系标识映射，**不要求把全部 OWL 公理搬进 Neo4j**。
 
+**环境要求**：Python 3.9+（脚本只用标准库，无需 pip install）。Protégé 是可选 GUI 建模器；Neo4j 需 5.x 离线导入环境。
+
 ## 施工顺序（照做，不要跳步）
 
 ### 第 0 步：先跑通三张假笔记
